@@ -1,4 +1,3 @@
-import dirTree from 'directory-tree';
 import { XMLParser } from 'fast-xml-parser';
 
 import { filterRoutes } from './sitemap.js';
@@ -127,19 +126,15 @@ export async function _sampledUrls(sitemapXml: string): Promise<string[]> {
       projDir += '/';
     }
 
-    const dirTreeRes = dirTree(projDir + 'src/routes');
-    routes = extractPaths(dirTreeRes);
-    // Match +page.svelte or +page@.svelte (used to break out of a layout).
-    //https://kit.svelte.dev/docs/advanced-routing#advanced-layouts-breaking-out-of-layouts
-    routes = routes.filter((route) => route.match(/\+page.*\.svelte$/));
+    routes = Object.keys(import.meta.glob('../../src/routes/**/+page*.svelte'));
 
     // 1. Trim everything to left of '/src/routes/' so it starts with
     //    `src/routes/` as `filterRoutes()` expects.
     // 2. Remove all grouping segments. i.e. those starting with '(' and ending
     //    with ')'
-    const i = routes[0].indexOf('/src/routes/');
+    const i = routes[0].indexOf('/routes/');
     const regex = /\/\([^)]+\)/g;
-    routes = routes.map((route) => route.slice(i).replace(regex, ''));
+    routes = routes.map((route) => '/src' + route.slice(i).replace(regex, ''));
   } catch (err) {
     console.error('An error occurred:', err);
   }
@@ -149,11 +144,11 @@ export async function _sampledUrls(sitemapXml: string): Promise<string[]> {
   // generation of the sitemap.
   routes = filterRoutes(routes, []);
 
-  // Remove any `/[[lang]]` prefix. We can just use the default language that
+  // Remove any optional `/[[lang]]` prefix. We can just use the default language that
   // will not have this stem, for the purposes of this sampling. But ensure root
   // becomes '/', not an empty string.
   routes = routes.map((route) => {
-    return route.replace('/[[lang]]', '') || '/';
+    return route.replace(/\/?\[(\[lang(=[a-z]+)?\]|lang(=[a-z]+)?)\]/, '') || '/';
   });
 
   // Separate static and dynamic routes. Remember these are _routes_ from disk
@@ -264,30 +259,4 @@ export function findFirstMatches(regexPatterns: Set<string>, haystack: string[])
   }
 
   return firstMatches;
-}
-
-/**
- * Extracts the paths from a dirTree response and returns an array of strings
- * representing full disk paths to each route and directory.
- * - This needs to be filtered to remove items that do not end in `+page.svelte`
- *   in order to represent routes; we do that outside of this function given
- *   this is recursive.
- *
- * @param obj - The dirTree response object. https://www.npmjs.com/package/directory-tree
- * @param paths - Array of existing paths to append to (leave unspecified; used
- * for recursion)
- * @returns An array of strings representing disk paths to each route.
- */
-export function extractPaths(obj: dirTree.DirectoryTree, paths: string[] = []): string[] {
-  if (obj.path) {
-    paths.push(obj.path);
-  }
-
-  if (Array.isArray(obj.children)) {
-    for (const child of obj.children) {
-      extractPaths(child, paths);
-    }
-  }
-
-  return paths;
 }
